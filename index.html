@@ -47,6 +47,7 @@ small{color:var(--muted);display:block;margin-top:14px;line-height:1.4}
     <button id="unlock">Log in</button>
   </div>
   <div id="vault" class="hide">
+    <div class="ok" id="success" style="font-weight:600;font-size:1.05rem"></div>
     <h1>Your private notes</h1>
     <p>Encrypted on this device. Only your username and password can read them.</p>
     <textarea id="notes" placeholder="Write anything here…"></textarea>
@@ -82,7 +83,7 @@ $("create").onclick=async function(){
   salt=crypto.getRandomValues(new Uint8Array(16));
   cryptoKey=await derive(u+"\n"+a,salt);
   if(!(await seal(""))){$("e1").textContent="Could not save in this browser.";return}
-  $("u1").value=$("p1").value=$("p2").value="";$("e1").textContent="";$("notes").value="";show("vault");
+  $("u1").value=$("p1").value=$("p2").value="";$("e1").textContent="";$("notes").value="";$("success").textContent="";show("vault");
 };
 $("unlock").onclick=async function(){
   var v=load();if(!v){start();return}
@@ -90,7 +91,7 @@ $("unlock").onclick=async function(){
     salt=unb64(v.salt);
     var k=await derive($("u3").value.trim().toLowerCase()+"\n"+$("p3").value,salt);
     var pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:unb64(v.iv)},k,unb64(v.data));
-    cryptoKey=k;$("notes").value=dec.decode(pt);$("u3").value=$("p3").value="";$("e2").textContent="";show("vault");
+    cryptoKey=k;$("notes").value=dec.decode(pt);$("success").textContent="✓ Login Successful";$("u3").value=$("p3").value="";$("e2").textContent="";show("vault");
   }catch(e){$("e2").textContent="Wrong username or password."}
 };
 $("p3").addEventListener("keydown",function(e){if(e.key==="Enter")$("unlock").click()});
@@ -99,7 +100,7 @@ $("save").onclick=async function(){
   $("ok").textContent=ok?"Saved and encrypted.":"Could not save.";
   setTimeout(function(){$("ok").textContent=""},2000);
 };
-$("lock").onclick=function(){cryptoKey=null;$("notes").value="";show("login")};
+$("lock").onclick=function(){cryptoKey=null;$("notes").value="";$("success").textContent="";show("login")};
 $("reset").onclick=function(e){
   e.preventDefault();
   if(confirm("Erase all notes and the vault? This cannot be undone.")){
