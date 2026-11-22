@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Private Vault</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--text:#1b1f24;--muted:#69727d;--accent:#0f766e;--accent-text:#fff;--border:#d8dde3;--err:#b42318;
+color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101418;--card:#1a2027;--text:#e8ebee;--muted:#98a2ad;--accent:#2dd4bf;--accent-text:#04201c;--border:#2c353f;--err:#f97066;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#101418;--card:#1a2027;--text:#e8ebee;--muted:#98a2ad;--accent:#2dd4bf;--accent-text:#04201c;--border:#2c353f;--err:#f97066;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px;width:100%;max-width:420px}
+h1{font-size:1.4rem;margin:0 0 6px}
+p{color:var(--muted);margin:0 0 18px;line-height:1.45;font-size:.95rem}
+input,textarea{width:100%;padding:12px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text);font:inherit;margin-bottom:12px}
+textarea{min-height:240px;resize:vertical}
+button{font:inherit;border:0;border-radius:10px;padding:12px 16px;cursor:pointer;background:var(--accent);color:var(--accent-text);font-weight:600;width:100%}
+button.ghost{background:transparent;color:var(--muted);border:1px solid var(--border);font-weight:500}
+.row{display:flex;gap:10px}
+.err{color:var(--err);min-height:1.2em;font-size:.9rem;margin:0 0 10px}
+.ok{color:var(--accent);font-size:.9rem;min-height:1.2em;margin:0 0 10px}
+.hide{display:none}
+small{color:var(--muted);display:block;margin-top:14px;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="card">
+  <div id="setup" class="hide">
+    <h1>Create your vault</h1>
+    <p>Choose a username and password. They are never stored anywhere. Together they unlock your encrypted notes.</p>
+    <input id="u1" type="text" placeholder="Username" autocomplete="username">
+    <input id="p1" type="password" placeholder="Password (12+ characters)" autocomplete="new-password">
+    <input id="p2" type="password" placeholder="Repeat password" autocomplete="new-password">
+    <div class="err" id="e1"></div>
+    <button id="create">Create vault</button>
+    <small>If you forget your username or password, the notes cannot be recovered.</small>
+  </div>
+  <div id="login" class="hide">
+    <h1>Welcome back</h1>
+    <p>Log in to unlock your private notes.</p>
+    <input id="u3" type="text" placeholder="Username" autocomplete="username">
+    <input id="p3" type="password" placeholder="Password" autocomplete="current-password">
+    <div class="err" id="e2"></div>
+    <button id="unlock">Log in</button>
+  </div>
+  <div id="vault" class="hide">
+    <h1>Your private notes</h1>
+    <p>Encrypted on this device. Only your username and password can read them.</p>
+    <textarea id="notes" placeholder="Write anything here…"></textarea>
+    <div class="ok" id="ok"></div>
+    <div class="row"><button id="save">Save</button><button id="lock" class="ghost">Lock</button></div>
+    <small><a href="#" id="reset" style="color:var(--muted)">Erase vault and start over</a></small>
+  </div>
+</div>
+<script>
+(function(){
+var KEY="private-vault-v1", enc=new TextEncoder(), dec=new TextDecoder(), cryptoKey=null, salt=null;
+function $(id){return document.getElementById(id)}
+function b64(buf){var s="",b=new Uint8Array(buf);for(var i=0;i<b.length;i++)s+=String.fromCharCode(b[i]);return btoa(s)}
+function unb64(s){var r=atob(s),b=new Uint8Array(r.length);for(var i=0;i<r.length;i++)b[i]=r.charCodeAt(i);return b}
+function load(){try{var v=localStorage.getItem(KEY);return v?JSON.parse(v):null}catch(e){return null}}
+function store(o){try{localStorage.setItem(KEY,JSON.stringify(o));return true}catch(e){return false}}
+function show(id){["setup","login","vault"].forEach(function(x){$(x).classList.toggle("hide",x!==id)})}
+async function derive(pass,s){
+  var base=await crypto.subtle.importKey("raw",enc.encode(pass),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt:s,iterations:310000,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+}
+async function seal(text){
+  var iv=crypto.getRandomValues(new Uint8Array(12));
+  var ct=await crypto.subtle.encrypt({name:"AES-GCM",iv:iv},cryptoKey,enc.encode(text));
+  return store({salt:b64(salt),iv:b64(iv),data:b64(ct)});
+}
+function start(){show(load()?"login":"setup")}
+$("create").onclick=async function(){
+  var u=$("u1").value.trim().toLowerCase(),a=$("p1").value,b=$("p2").value;
+  if(!u){$("e1").textContent="Enter a username.";return}
+  if(a.length<12){$("e1").textContent="Use at least 12 characters.";return}
+  if(a!==b){$("e1").textContent="Passwords do not match.";return}
+  salt=crypto.getRandomValues(new Uint8Array(16));
+  cryptoKey=await derive(u+"\n"+a,salt);
+  if(!(await seal(""))){$("e1").textContent="Could not save in this browser.";return}
+  $("u1").value=$("p1").value=$("p2").value="";$("e1").textContent="";$("notes").value="";show("vault");
+};
+$("unlock").onclick=async function(){
+  var v=load();if(!v){start();return}
+  try{
+    salt=unb64(v.salt);
+    var k=await derive($("u3").value.trim().toLowerCase()+"\n"+$("p3").value,salt);
+    var pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:unb64(v.iv)},k,unb64(v.data));
+    cryptoKey=k;$("notes").value=dec.decode(pt);$("u3").value=$("p3").value="";$("e2").textContent="";show("vault");
+  }catch(e){$("e2").textContent="Wrong username or password."}
+};
+$("p3").addEventListener("keydown",function(e){if(e.key==="Enter")$("unlock").click()});
+$("save").onclick=async function(){
+  var ok=await seal($("notes").value);
+  $("ok").textContent=ok?"Saved and encrypted.":"Could not save.";
+  setTimeout(function(){$("ok").textContent=""},2000);
+};
+$("lock").onclick=function(){cryptoKey=null;$("notes").value="";show("login")};
+$("reset").onclick=function(e){
+  e.preventDefault();
+  if(confirm("Erase all notes and the vault? This cannot be undone.")){
+    try{localStorage.removeItem(KEY)}catch(x){}
+    cryptoKey=null;$("notes").value="";start();
+  }
+};
+start();
+})();
+</script>
+</body>
+</html>
